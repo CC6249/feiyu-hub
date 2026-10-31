@@ -23,7 +23,7 @@ import { execFile } from 'node:child_process';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUB = path.join(ROOT, 'public');
 const CONFIG_PATH = path.resolve(process.env.FEIYU_CONFIG || path.join(ROOT, 'config.json'));
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 const LOCAL = '127.0.0.1';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -181,6 +181,9 @@ function normalizeConfig(raw) {
       url: s.url ? String(s.url) : '',
       // 面板里「扫描后加入」的服务：可以从界面移除，手写的不会
       custom: !!s.custom,
+      // 扫描后加入的服务可以顺手存登录凭据：有账密就自动「打开即复制」
+      user: String(s.user || ''),
+      pass: String(s.pass || ''),
     };
 
     if (type === 'proxy') {
@@ -209,6 +212,16 @@ function normalizeConfig(raw) {
     } else {
       svc.port = intOr(s.port, 0);
       if (!svc.port && !svc.url) { warnings.push(`services[${i}] (${id}) direct 类型缺少 port，已跳过`); continue; }
+    }
+
+    // 存了账号/密码的自定义服务：视作「要登录」，打开时自动复制密码（或账号）
+    if (svc.user || svc.pass) {
+      svc.autocopy = true;
+      svc.needsAuth = true;
+      svc.secret = svc.pass || svc.user;
+      svc.secretLabel = svc.pass ? '密码' : '账号';
+    } else {
+      svc.needsAuth = false;
     }
 
     seen.add(id);
@@ -437,12 +450,15 @@ function probeTitle(port) {
         if (code === 400 && /plain HTTP request was sent to/i.test(buf)) return finish(null);
         if (code >= 500) return finish(null);
         const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(buf);
+        // 要登录的后台：401/403，或页面里就有密码输入框
+        const auth = code === 401 || code === 403 || /type=["']?password|name=["']?password|id=["']?password|current-password/i.test(buf);
         // 状态码 >=400 又没有标题：基本是空壳接口（404/400），列出来只会干扰选择
-        if (!m && code >= 400) return finish(null);
+        // 需要登录的除外 —— 那正是用户想加进面板的目标
+        if (!m && code >= 400 && !auth) return finish(null);
         let title = m ? m[1].replace(/\s+/g, ' ').trim() : '';
         if (title.length > 40) title = title.slice(0, 40);
-        if (!title) title = code === 426 ? `WebSocket 端口 ${port}` : `HTTP ${port}`;
-        finish({ port, title, code });
+        if (!title) title = auth ? '需要登录' : (code === 426 ? `WebSocket 端口 ${port}` : `HTTP ${port}`);
+        finish({ port, title, code, auth });
       });
     });
     req.on('timeout', () => { req.destroy(); finish(null); });
@@ -478,6 +494,7 @@ async function scanPorts() {
       port: x.port,
       title: x.title,
       code: x.code,
+      auth: !!x.auth,
       state: custom.has(x.port) ? 'pinned' : (builtin.has(x.port) ? 'builtin' : 'new'),
     })),
   };
@@ -501,7 +518,7 @@ async function saveRawConfig(raw) {
   await fsp.writeFile(CONFIG_PATH, JSON.stringify(raw, null, 2) + '\n', 'utf8');
 }
 
-async function addCustomService(port, name) {
+async function addCustomService(port, name, user, pass) {
   if (!validPort(port)) return { ok: false, error: 'port 不合法' };
   if (builtinPortSet().has(port)) return { ok: false, error: `端口 ${port} 已经是面板里的服务` };
   const raw = (await readRawConfig()) || {
@@ -510,9 +527,15 @@ async function addCustomService(port, name) {
   if (!Array.isArray(raw.services)) raw.services = [];
   const id = `custom-${port}`;
   const nm = String(name || '').trim().slice(0, 40) || `端口 ${port}`;
+  const us = String(user || '').trim().slice(0, 80);
+  const pw = String(pass || '').trim().slice(0, 120);
   const exist = raw.services.find((s) => s && (s.custom === true) && Number(s.port) === port);
   if (exist) {
     exist.name = nm;
+    // 只在这次真的传了凭据时才覆盖，避免改名把已有账号密码冲掉
+    if (us) exist.user = us;
+    if (pw) exist.pass = pw;
+    if (us || pw) exist.desc = `需要登录 · 端口 ${port} · 扫描后手动加入`;
   } else {
     const used = new Set(raw.services.map((s) => String(s && s.id || '')));
     let finalId = id;
@@ -521,13 +544,15 @@ async function addCustomService(port, name) {
     raw.services.push({
       id: finalId,
       name: nm,
-      desc: `端口 ${port} · 扫描后手动加入`,
+      desc: `${(us || pw) ? '需要登录 · ' : ''}端口 ${port} · 扫描后手动加入`,
       group: '自定义',
       accent: CUSTOM_ACCENTS[port % CUSTOM_ACCENTS.length],
       badge: String(port),
       type: 'direct',
       port,
       custom: true,
+      user: us,
+      pass: pw,
     });
   }
   await saveRawConfig(raw);
@@ -897,7 +922,7 @@ const app = http.createServer(async (req, res) => {
       const port = validPort(body.port);
       if (!port) return sendJson(res, 400, { ok: false, error: 'port 不合法' });
       const r = p === '/api/services/add'
-        ? await addCustomService(port, body.name)
+        ? await addCustomService(port, body.name, body.user, body.pass)
         : await removeCustomService(port);
       log(`${p === '/api/services/add' ? '加入' : '移除'}自定义服务 ${port} -> ${r.ok ? 'ok' : r.error}`);
       return sendJson(res, r.ok ? 200 : 400, r);

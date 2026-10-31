@@ -94,6 +94,8 @@ h1{font-size:19px;margin:0;font-weight:600;letter-spacing:.2px}
   padding:1px 6px;margin-left:6px;border-radius:6px;vertical-align:1px;
   background:rgba(163,113,247,.14);color:#b392f0;border:1px solid rgba(163,113,247,.28);
 }
+.keytag.authtag{background:rgba(210,153,34,.14);color:#d29922;border-color:rgba(210,153,34,.3)}
+.tag.login{color:#d29922;border-color:rgba(210,153,34,.35);background:rgba(210,153,34,.08)}
 .desc{font-size:12.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto}
 .ms{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
@@ -235,7 +237,7 @@ function card(s){
   return `<a class="card ${on?'':'off'}" href="${href}" target="${s.openInNewTab===false?'_self':'_blank'}" rel="noopener" style="--accent:${a}"${secretAttr}>
     <div class="badge"><svg viewBox="0 0 24 24">${ICONS[s.icon]||ICONS[s.id]||ICONS._default}</svg></div>
     <div class="body">
-      <div class="name">${esc(s.name)}${hasSecret?'<span class="keytag">🔑 自动复制</span>':''}</div>
+      <div class="name">${esc(s.name)}${hasSecret?'<span class="keytag">🔑 自动复制</span>':''}${(s.needsAuth&&!hasSecret)?'<span class="keytag authtag">需登录</span>':''}</div>
       <div class="desc">${esc(s.desc||'')}</div>
     </div>
     <div class="right">
@@ -381,7 +383,8 @@ function renderScan(items){
     else if(x.state === 'pinned') act = '<span class="tag ok">已加入</span>';
     else act = '<button class="btn sm" onclick="pin(' + x.port + ')">加入面板</button>';
     return '<div class="row"><div class="p">' + x.port + '</div>' +
-      '<div class="t" title="' + esc(x.title) + '">' + esc(x.title) + '</div>' +
+      '<div class="t" title="' + esc(x.title) + '">' + esc(x.title) +
+      (x.auth ? ' <span class="tag login">需登录</span>' : '') + '</div>' +
       '<div class="act">' + act + '</div></div>';
   }).join('');
 }
@@ -389,10 +392,23 @@ function renderScan(items){
 async function pin(port){
   const items = el('scanList')._items || [];
   const hit = items.find(x=>x.port===port);
+  let user = '', pass = '';
+  if(hit && hit.auth){
+    const want = confirm('这个服务需要登录。\n\n现在把账号密码存进面板吗？\n存了以后点「打开」会自动复制密码，粘贴后回车即可登录。');
+    if(want){
+      const u = prompt('账号（没有就留空）', '');
+      if(u !== null) user = u.trim();
+      const p = prompt('密码 / 密钥（留空也可以先加进面板）', '');
+      if(p !== null) pass = p.trim();
+    }
+  }
   try{
-    const d = await post('/api/services/add', {port, name: hit ? hit.title : ''});
+    const body = {port, name: hit ? hit.title : ''};
+    if(user) body.user = user;
+    if(pass) body.pass = pass;
+    const d = await post('/api/services/add', body);
     if(!d.ok) throw new Error(d.error || '失败');
-    toast('端口 ' + port + ' 已加入面板');
+    toast(pass ? '端口 ' + port + ' 已加入面板 · 打开时会自动复制密码' : '端口 ' + port + ' 已加入面板');
     if(hit) hit.state = 'pinned';
     renderScan(items);
     await refresh(false);

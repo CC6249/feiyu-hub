@@ -20,7 +20,7 @@
 **Linux / NAS / 云服务器（fnOS、Debian、Ubuntu）**
 
 ```bash
-tar -xzf feiyu-hub-1.0.2.tar.gz && cd feiyu-hub-1.0.2
+tar -xzf feiyu-hub-1.0.3.tar.gz && cd feiyu-hub-1.0.3
 sudo bash scripts/install.sh
 ```
 
@@ -101,6 +101,11 @@ node server.mjs
 - **加入面板** —— 立刻变成一张常驻卡片，同时写进 `config.json`（带 `"custom": true`），重启也还在。
 - **已在面板 / 已加入** —— 这个端口已经是一张卡片了，不重复添加。
 - 常驻卡片右下角有 **移除**，点掉会把那条从 `config.json` 里删干净。
+
+探出来的后台如果**要登录**（返回 401/403，或页面里就有密码框），列表里会标「需登录」。
+点「加入面板」时会顺手问你要不要把账号密码存进面板——存了以后这张卡片就带 🔑 自动复制：
+点「打开」先把密码放进剪贴板，粘贴后回车就能进（账号在卡片上有单独的复制按钮）。
+凭据明文存在 `config.json` 里那条 `custom` 服务上（`user` / `pass` 字段），改名不会冲掉。
 
 手写进 `config.json` 的卡片不会出现「移除」按钮，扫描也删不掉它们——只有自己加进去的才管得了自己。
 扫描是**同步 HTTP 探测**，不依赖外网，也不上传任何东西。
@@ -217,7 +222,7 @@ Hub 只负责「把服务摆到一个页面上」，**怎么把流量送到这�
 ## 目录结构
 
 ```
-feiyu-hub-1.0.2/
+feiyu-hub-1.0.3/
 ├── server.mjs              主程序（零依赖，约 500 行）
 ├── config.example.json     配置模板，复制成 config.json 用
 ├── public/                 前端（PWA：index.html / sw.js / 图标）
