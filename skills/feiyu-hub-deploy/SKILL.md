@@ -57,7 +57,25 @@ winget install OpenJS.NodeJS.LTS
 
 > fnOS 特有：系统 node 常在 `/usr/local/nodejs/bin/node` 且不在普通用户 PATH 里，`node -v` 会失败。安装脚本自己会去这个路径找，可以直接继续。
 
-## 第三步：安装
+## 第三步：问清访问方式（**安装之前必须问**）
+
+面板装好从哪儿打开，决定了 `bind`、要不要密码、以及装完还要做哪些网络动作。**不要默认用户只在内网用。**
+
+一句话问：「你打算在什么网络下打开这个页面——只在家里、人在外面也要连、还是想用域名 / 公网 IP 访问？」然后对到下面四种：
+
+| 选项 | 典型说法 | 安装时 | 装完还要做 |
+|---|---|---|---|
+| **A 只在内网** | “家里用用”“同一个 Wi-Fi” | `bind: "0.0.0.0"`，`auth` 可留空 | 无，交付局域网地址 |
+| **B 组网（Tailscale / ZeroTier）** | “外面也想连”“没公网 IP” | 同上，建议设密码 | 机器和手机装客户端、登录同一账号，`tailscale ip -4` 拿 `100.x.x.x`。**不要开 Tailscale Funnel**（等于挂公网） |
+| **C DDNS + 端口映射 / 内网穿透（frp、cloudflared）** | “我有域名” | **先**设 `auth.password`，再对外 | 确认真有公网 IP（`curl ifconfig.me` 与路由器 WAN 口对比）；映射面板端口；80/443 多被运营商封，用 8443；能上 HTTPS 就上 |
+| **D 云服务器固定 IP** | “放云上”“有台小服务器” | 云主机装 Hub，安全组只放面板端口 | 家里服务靠反向隧道或组网接过去；对外建议套 Caddy/Nginx 上 TLS |
+
+- **A / B**：直接装，别动路由器。
+- **C / D**：**先在 `config.json` 里设好 `auth.password` 再开端口**，顺序不能反。默认无密码的面板被扫到就是全裸。
+- 用户选 C 但没有公网 IP（双层 NAT、运营商大内网）→ 明确告诉他直连不通，改用 frp / cloudflared 这类「只要一台公网中转机」的穿透方案。
+- 访问方式只影响 `bind` 和 `auth`，**不影响 `services`**：卡片地址按访问时的 `Host` 动态生成，同一份配置四种方式通用。
+
+## 第四步：安装
 
 两个安装脚本都是幂等的，重复跑不会破坏已有 `config.json`（除非显式 `--force`）。
 
@@ -89,7 +107,7 @@ bash <包目录>/scripts/install.sh --prefix ~/feiyu-hub --no-service
 ```
 常驻需自行写 launchd plist；临时用 `bash ~/feiyu-hub/scripts/start.sh`。
 
-## 第四步：配置服务清单（必须问用户）
+## 第五步：配置服务清单（必须问用户）
 
 安装生成的 `config.json` 只是示例模板，端口大概率对不上目标机器。**不要扫端口猜**，一次问清：
 
@@ -134,7 +152,7 @@ curl -s http://127.0.0.1:<端口>/api/reload
 
 **写错的字段不会让程序崩溃**——非法项被跳过并记入 `warnings`，`/api/config` 和 `verify.mjs` 都能看到。
 
-## 第五步：验证（必做）
+## 第六步：验证（必做）
 
 ```bash
 node <安装目录>/scripts/verify.mjs
@@ -148,20 +166,20 @@ node <安装目录>/scripts/verify.mjs --json     # 结构化，便于程序判�
 | `FAIL panel /api/ping` | 进程没起来 | 看日志：`sudo journalctl -u feiyu-hub -n 60 --no-pager -o cat` |
 | `FAIL 反代端口 :18766` | 反代未监听 | 端口被占用或配置重复 |
 
-## 第六步：交付
+## 第七步：交付
 
 至少给用户五条信息：
 
-1. **访问地址**：`http://<这台机器局域网IP>:<面板端口>`
+1. **访问地址**：按第 3 步选的方式给——A 给局域网 IP，B 给 `100.x` 地址，C/D 给域名或云机地址
 2. **配置文件绝对路径** + 「改完访问 `/api/reload`」
 3. **启停命令**：`systemctl status|restart|stop feiyu-hub`，Windows 用 `-AutoStart`
 4. **手机用法**：浏览器打开同一地址 → 添加到主屏幕（必须用 IP，不能用 localhost）
-5. **安全提醒**：面板默认无密码；只要该地址可能被外人访问，就在 `config.json` 里设 `auth.password`
+5. **安全提醒**：面板默认无密码。A 方式且不出网可以不开；**B/C/D 一律设 `auth.password`**，C/D 还建议套 HTTPS
 
 ## 红线
 
 - 不改 `server.mjs`；不把用户的服务清单硬编码进代码。
-- 不动路由器端口映射 / DDNS / frp；用户明确要求才做。
+- 未经用户在第 3 步明确选择，不动路由器端口映射 / DDNS / frp / 组网客户端；选 C/D 时必须先设 `auth.password` 再开端口。
 - 不提交 `config.json`（可能含密码）。
 - 每个结论都要有 `verify.mjs` 或接口返回作为证据，不要只说「应该好了」。
 

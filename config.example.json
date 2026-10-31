@@ -3,7 +3,8 @@
     "把本文件复制成同目录的 config.json 再改。带下划线的键只是说明，可以整段删掉。",
     "services 里每张卡片两种类型：direct（浏览器直连目标端口，最常用）和 proxy（转发到只监听 127.0.0.1 的服务，并由本程序注入 token）。",
     "proxy 类型每张卡片要独占一个 proxyPort，不能和 port 或别的卡片重复。",
-    "改完保存，访问 /api/reload 热加载（改 port / proxyPort / upstream 需要重启进程）。"
+    "改完保存，访问 /api/reload 热加载（改 port / proxyPort / upstream 需要重启进程）。",
+    "从哪儿访问（只在内网 / Tailscale 组网 / DDNS + 端口映射 / 云服务器固定 IP）只影响 bind 和要不要开 auth，不影响 services：卡片地址按访问时的 Host 动态生成。要对外就先把 auth.password 填好，再开端口。"
   ],
   "site": {
     "name": "肥鱼控制中心",
