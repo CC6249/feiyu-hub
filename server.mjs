@@ -644,6 +644,7 @@ async function buildServices(req) {
       custom: !!s.custom,
       alive: st.alive, code: st.code, ms: st.ms, err: st.err || '',
       secret: s.secret || '', secretLabel: s.secretLabel || '', autocopy: !!s.autocopy,
+      needsAuth: !!s.needsAuth,
       openInNewTab: s.openInNewTab,
     };
   }));
