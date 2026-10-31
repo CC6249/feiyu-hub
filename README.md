@@ -5,18 +5,9 @@
 
 零依赖（只用 Node.js 内置模块），单进程，跨平台，配置全在一个 `config.json` 里。
 
-```
-┌─────────────────────────────────────────┐
-│  肥鱼控制中心           2/5 在线    ⟳   │
-│                                         │
-│  核心                                   │
-│  ▸ Home Assistant     在线   12ms       │
-│  ▸ 远程桌面   🔑自动复制   在线   31ms   │
-│  ▸ NAS 控制面板        在线   8ms       │
-│  控制                                   │
-│  ▸ 我的后台（反代）     在线   5ms       │
-└─────────────────────────────────────────┘
-```
+![肥鱼控制中心界面](docs/screenshot.png)
+
+<sub>真实运行的截图：8 个服务全部在线，右侧是实时状态码与耗时。`🔑 打开即复制` 表示点「打开」时先把密钥写进剪贴板；反代卡片会标出 token 是否已自动带上。图中服务地址与账号已打码。</sub>
 
 ---
 
@@ -134,6 +125,7 @@ feiyu-hub-1.0.0/
 ├── server.mjs              主程序（零依赖，约 500 行）
 ├── config.example.json     配置模板，复制成 config.json 用
 ├── public/                 前端（PWA：index.html / sw.js / 图标）
+├── docs/screenshot.png     README 里的界面截图
 ├── scripts/
 │   ├── install.sh          Linux / NAS 一键安装（systemd）
 │   ├── install.ps1         Windows 一键安装
