@@ -1,0 +1,102 @@
+{
+  "_notes": [
+    "把本文件复制成同目录的 config.json 再改。带下划线的键只是说明，可以整段删掉。",
+    "services 里每张卡片两种类型：direct（浏览器直连目标端口，最常用）和 proxy（转发到只监听 127.0.0.1 的服务，并由本程序注入 token）。",
+    "proxy 类型每张卡片要独占一个 proxyPort，不能和 port 或别的卡片重复。",
+    "改完保存，访问 /api/reload 热加载（改 port / proxyPort / upstream 需要重启进程）。"
+  ],
+  "site": {
+    "name": "肥鱼控制中心",
+    "shortName": "肥鱼",
+    "subtitle": "自托管服务统一入口",
+    "footer": "feiyu hub 1.0"
+  },
+  "bind": "0.0.0.0",
+  "port": 18765,
+  "auth": {
+    "_note": "把 password 留空 = 关闭鉴权（局域网自用可以关；能从这个地址访问到的外人也能看到面板时才需要开）",
+    "user": "admin",
+    "password": "",
+    "realm": "Feiyu Hub"
+  },
+  "tokens": {
+    "_note": "可选。type=file 从文件读；type=command 执行命令后用正则从输出里捞。没有需要注入凭据的服务时整段删掉。",
+    "qqbridge": {
+      "type": "file",
+      "path": "/opt/qq-bridge/state/console-token"
+    },
+    "dsh": {
+      "type": "command",
+      "cmd": "sudo",
+      "args": ["-n", "journalctl", "-u", "dsh", "--no-pager", "-o", "cat"],
+      "regex": "token=([A-Za-z0-9_-]{20,})",
+      "pick": "last",
+      "ttlSec": 300
+    }
+  },
+  "services": [
+    {
+      "id": "ha",
+      "name": "Home Assistant",
+      "desc": "智能家居面板",
+      "group": "核心",
+      "accent": "amber",
+      "badge": "8123",
+      "type": "direct",
+      "port": 8123,
+      "path": "/"
+    },
+    {
+      "id": "novnc",
+      "name": "远程桌面",
+      "desc": "浏览器里的容器桌面",
+      "group": "核心",
+      "accent": "violet",
+      "badge": "6081",
+      "type": "direct",
+      "port": 6081,
+      "path": "/vnc.html?autoconnect=1&resize=scale",
+      "probePath": "/vnc.html",
+      "_note": "secret 会在点开卡片时自动复制到剪贴板（http 页面没有 navigator.clipboard，前端用 execCommand 兜底）",
+      "secret": "把这里的密码换成你自己的",
+      "secretLabel": "VNC 密码",
+      "autocopy": true
+    },
+    {
+      "id": "fnos",
+      "name": "NAS 控制面板",
+      "desc": "系统管理",
+      "group": "核心",
+      "accent": "green",
+      "badge": "5666",
+      "type": "direct",
+      "port": 5666
+    },
+    {
+      "id": "qqbridge",
+      "name": "机器人控制台",
+      "desc": "转发到只监听 127.0.0.1 的后台并由服务端注入 token",
+      "group": "控制",
+      "accent": "cyan",
+      "badge": "控制台",
+      "type": "proxy",
+      "proxyPort": 18766,
+      "upstream": { "host": "127.0.0.1", "port": 3100, "probePath": "/" },
+      "inject": { "kind": "query-token", "tokenId": "qqbridge" },
+      "probeWithToken": true
+    },
+    {
+      "id": "dsh",
+      "name": "DSH Web",
+      "desc": "AI 工作台",
+      "group": "控制",
+      "accent": "pink",
+      "badge": "AI",
+      "type": "proxy",
+      "proxyPort": 18767,
+      "upstream": { "host": "127.0.0.1", "port": 3080, "probePath": "/" },
+      "inject": { "kind": "query-token", "tokenId": "dsh" },
+      "probeWithToken": true
+    }
+  ]
+}
