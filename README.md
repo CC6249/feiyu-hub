@@ -17,7 +17,7 @@
 
 需要 **Node.js 18+**（`node -v` 能打出版本就行）。
 
-**Linux / NAS（fnOS、Debian、Ubuntu）**
+**Linux / NAS / 云服务器（fnOS、Debian、Ubuntu）**
 
 ```bash
 tar -xzf feiyu-hub-1.0.0.tar.gz && cd feiyu-hub-1.0.0
@@ -25,6 +25,8 @@ sudo bash scripts/install.sh
 ```
 
 装到 `/opt/feiyu-hub`，注册 systemd 开机自启，最后自动跑一遍自检并打印访问地址。
+
+> 云服务器用的也是这条。装完还有两件事：**设密码**（公网上的面板一定会被扫）、在**云厂商安全组**放行面板端口。详见[「从哪儿访问」](#从哪儿访问先看装在哪再看从哪些设备看)。
 
 **Windows**
 
