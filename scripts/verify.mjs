@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const CONFIG_PATH = path.resolve(process.env.FEIYU_CONFIG || path.join(ROOT, 'config.json'));
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(n);

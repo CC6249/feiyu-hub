@@ -21,7 +21,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.0.0'
+$Version = '1.0.1'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SrcDir = Split-Path -Parent $ScriptDir
 

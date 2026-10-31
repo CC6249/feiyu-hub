@@ -16,6 +16,7 @@
 | `site.shortName` | string | 同 `name` | 主屏图标下的短名（建议 ≤4 字） |
 | `site.subtitle` | string | `feiyu hub` | 副标题，空服务时也显示 |
 | `site.footer` | string | `feiyu hub` | 页脚文字 |
+| `site.orientation` | string | `portrait` | 手机「添加到主屏幕」后的屏幕方向：`portrait` 锁竖屏、`any` 跟随自动旋转、`landscape` 锁横屏，也接受 `auto`（= `any`）。桌面浏览器不受影响；填非法值会降级 `portrait` 并在 `/api/diag` 告警 |
 | `bind` | string | `0.0.0.0` | 监听地址。容器里必须是 `0.0.0.0`；只给本机用可设 `127.0.0.1` |
 | `port` | number | `18765` | 面板端口 |
 | `auth` | object\|null | `null` | 访问鉴权，见下 |

@@ -23,7 +23,7 @@ import { execFile } from 'node:child_process';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUB = path.join(ROOT, 'public');
 const CONFIG_PATH = path.resolve(process.env.FEIYU_CONFIG || path.join(ROOT, 'config.json'));
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const LOCAL = '127.0.0.1';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -37,6 +37,7 @@ const DEFAULT_CONFIG = {
     shortName: '肥鱼',
     subtitle: 'feiyu hub',
     footer: 'feiyu hub',
+    orientation: 'portrait',
   },
   bind: '0.0.0.0',
   port: 18765,
@@ -67,6 +68,23 @@ function intOr(v, dflt) {
   return Number.isInteger(n) && n > 0 && n < 65536 ? n : dflt;
 }
 
+/** manifest 的 orientation 只认规范值；额外接受 auto 作为 any 的别名（更好记） */
+const ORIENTATIONS = new Set([
+  'any', 'natural', 'portrait', 'landscape',
+  'portrait-primary', 'portrait-secondary', 'landscape-primary', 'landscape-secondary',
+]);
+
+function orientationOr(v, warnings) {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return DEFAULT_CONFIG.site.orientation;
+  const val = s === 'auto' || s === 'rotate' ? 'any' : s;
+  if (!ORIENTATIONS.has(val)) {
+    warnings.push(`site.orientation "${v}" 不是合法值，已按 portrait 处理（可用：portrait / any / landscape）`);
+    return 'portrait';
+  }
+  return val;
+}
+
 /**
  * 校验并规范化配置。任何非法项只记 warning 并跳过，不抛异常——
  * 朋友的机器上配错一个字段，不应该导致整个面板起不来。
@@ -87,6 +105,7 @@ function normalizeConfig(raw) {
     shortName: String(site.shortName || site.name || DEFAULT_CONFIG.site.shortName),
     subtitle: String(site.subtitle || DEFAULT_CONFIG.site.subtitle),
     footer: String(site.footer || DEFAULT_CONFIG.site.footer),
+    orientation: orientationOr(site.orientation, warnings),
   };
 
   cfg.bind = typeof raw.bind === 'string' && raw.bind ? raw.bind : '0.0.0.0';
@@ -695,14 +714,14 @@ const app = http.createServer(async (req, res) => {
       }, null, 2));
     }
 
-    // PWA manifest 由配置动态生成，改 config.site 就能换品牌，不用改静态文件
+    // PWA manifest 由配置动态生成，改 config.site 就能换品牌与屏幕方向，不用改静态文件
     if (p === '/manifest.json') {
       res.writeHead(200, { 'content-type': 'application/manifest+json; charset=utf-8', 'cache-control': 'no-cache' });
       return res.end(JSON.stringify({
         name: cfg.site.name,
         short_name: cfg.site.shortName,
         description: cfg.site.subtitle || '自托管服务统一入口',
-        start_url: '/', scope: '/', display: 'standalone', orientation: 'portrait',
+        start_url: '/', scope: '/', display: 'standalone', orientation: cfg.site.orientation,
         background_color: '#0a0d13', theme_color: '#0a0d13', lang: 'zh-CN',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
