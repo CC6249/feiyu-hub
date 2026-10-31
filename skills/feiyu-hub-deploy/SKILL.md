@@ -144,11 +144,22 @@ bash <包目录>/scripts/install.sh --prefix ~/feiyu-hub --no-service
 
 ## 第五步：配置服务清单（必须问用户）
 
-安装生成的 `config.json` 只是示例模板，端口大概率对不上目标机器。**不要扫端口猜**，一次问清：
+安装生成的 `config.json` 只是示例模板，端口大概率对不上目标机器。先问，一次问清：
 
 1. 要放哪些服务？各自的**名称**和**端口**。
 2. 有没有只监听 `127.0.0.1` 的后台（这类必须用 `proxy` 类型）。
 3. 有没有需要「打开时自动复制密码」的（典型是 noVNC / 远程桌面）。
+
+> 用户答不上来「我机器上都有啥」很正常。这时别让他去翻 `netstat`，直接用面板自带的扫描：
+>
+> ```bash
+> curl -s http://127.0.0.1:<端口>/api/scan      # 列出本机 HTTP 后台，state=new/builtin/pinned
+> curl -s -X POST http://127.0.0.1:<端口>/api/services/add \
+>   -H 'Content-Type: application/json' -d '{"port":8080,"name":"后台管理"}'
+> ```
+>
+> `/api/services/add` 会写进 `config.json`（带 `"custom": true`）并热加载，**不用重启**。
+> 加入的条目界面右下角有「移除」；手写条目没有 `custom` 标记，扫描和移除都碰不到，不会误删。
 
 两种卡片：
 

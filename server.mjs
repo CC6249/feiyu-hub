@@ -23,7 +23,7 @@ import { execFile } from 'node:child_process';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUB = path.join(ROOT, 'public');
 const CONFIG_PATH = path.resolve(process.env.FEIYU_CONFIG || path.join(ROOT, 'config.json'));
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const LOCAL = '127.0.0.1';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -179,6 +179,8 @@ function normalizeConfig(raw) {
       autocopy: !!s.autocopy,
       openInNewTab: s.openInNewTab !== false,
       url: s.url ? String(s.url) : '',
+      // 面板里「扫描后加入」的服务：可以从界面移除，手写的不会
+      custom: !!s.custom,
     };
 
     if (type === 'proxy') {
@@ -345,6 +347,211 @@ function probe(target, timeoutMs) {
   });
 }
 
+/* ------------------------------------------------------- 端口扫描（本机） */
+
+// 这些端口即使开着也不是可用的 Web 后台，扫描时直接跳过
+const SCAN_SKIP = new Set([22, 80, 443, 3000, 3001, 15244]);
+
+function validPort(p) {
+  const n = Number(p);
+  return Number.isInteger(n) && n > 0 && n < 65536 ? n : 0;
+}
+
+function runCmd(cmd, args, timeout = 8000) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
+      resolve(err ? null : String(stdout));
+    });
+  });
+}
+
+/**
+ * 枚举本机监听的 TCP 端口。
+ * Windows 用 netstat -ano；类 Unix 优先 ss，退到 netstat，再退到 lsof。
+ * 三条命令都可能不存在，全都拿不到就返回空数组（扫描结果为空，不报错）。
+ */
+async function listListeningPorts() {
+  const ports = new Set();
+
+  if (process.platform === 'win32') {
+    const out = await runCmd('netstat', ['-ano', '-p', 'tcp']);
+    if (!out) return [];
+    for (const line of out.split(/\r?\n/)) {
+      const c = line.trim().split(/\s+/);
+      if (c.length < 4 || !/^TCP$/i.test(c[0]) || !/LISTENING/i.test(c[3])) continue;
+      const p = Number(String(c[1]).replace(/.*:/, ''));
+      if (validPort(p)) ports.add(p);
+    }
+    return [...ports].sort((a, b) => a - b);
+  }
+
+  let out = await runCmd('ss', ['-ltn']);
+  if (out) {
+    for (const line of out.split(/\r?\n/).slice(1)) {
+      const c = line.trim().split(/\s+/);
+      if (c.length < 4) continue;
+      const p = Number(String(c[3]).replace(/.*:/, ''));
+      if (validPort(p)) ports.add(p);
+    }
+    return [...ports].sort((a, b) => a - b);
+  }
+
+  out = await runCmd('netstat', ['-ltn']);
+  if (out) {
+    for (const line of out.split(/\r?\n/)) {
+      const c = line.trim().split(/\s+/);
+      if (c.length < 4 || !/^tcp/i.test(c[0])) continue;
+      const p = Number(String(c[3]).replace(/.*:/, ''));
+      if (validPort(p)) ports.add(p);
+    }
+    return [...ports].sort((a, b) => a - b);
+  }
+
+  out = await runCmd('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN']);
+  if (out) {
+    for (const line of out.split(/\r?\n/).map((x) => x.trim())) {
+      const m = /:(\d+)\s+\(LISTEN\)$/.exec(line);
+      if (!m) continue;
+      const p = Number(m[1]);
+      if (validPort(p)) ports.add(p);
+    }
+  }
+  return [...ports].sort((a, b) => a - b);
+}
+
+/** 探一个端口是不是 HTTP 后台，能探到就带页面标题回来 */
+function probeTitle(port) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const req = http.request({
+      host: LOCAL, port, path: '/', method: 'GET', timeout: 2000,
+      headers: { 'user-agent': `feiyu-hub/${VERSION}`, accept: 'text/html,*/*' },
+    }, (res) => {
+      const code = res.statusCode || 0;
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { if (buf.length < 30000) buf += c; });
+      res.on('end', () => {
+        // 该端口其实是 HTTPS：用 HTTP 探测必然 400 且正文含这句，丢掉免得生成无意义卡片
+        if (code === 400 && /plain HTTP request was sent to/i.test(buf)) return finish(null);
+        if (code >= 500) return finish(null);
+        const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(buf);
+        // 状态码 >=400 又没有标题：基本是空壳接口（404/400），列出来只会干扰选择
+        if (!m && code >= 400) return finish(null);
+        let title = m ? m[1].replace(/\s+/g, ' ').trim() : '';
+        if (title.length > 40) title = title.slice(0, 40);
+        if (!title) title = code === 426 ? `WebSocket 端口 ${port}` : `HTTP ${port}`;
+        finish({ port, title, code });
+      });
+    });
+    req.on('timeout', () => { req.destroy(); finish(null); });
+    req.on('error', () => finish(null));
+    req.end();
+  });
+}
+
+function builtinPortSet() {
+  const set = new Set([cfg.port]);
+  for (const s of cfg.services) {
+    if (s.custom) continue;               // 自定义的单独判定
+    if (s.type === 'proxy') { set.add(s.proxyPort); set.add(s.upstream.port); }
+    else if (s.port) set.add(s.port);
+  }
+  return set;
+}
+
+function customPortSet() {
+  return new Set(cfg.services.filter((s) => s.custom && s.port).map((s) => s.port));
+}
+
+async function scanPorts() {
+  const all = await listListeningPorts();
+  const builtin = builtinPortSet();
+  const custom = customPortSet();
+  const targets = all.filter((p) => !SCAN_SKIP.has(p));
+  const hits = (await Promise.all(targets.map((p) => probeTitle(p)))).filter(Boolean);
+  hits.sort((a, b) => a.port - b.port);
+  return {
+    ports: all.length,
+    items: hits.map((x) => ({
+      port: x.port,
+      title: x.title,
+      code: x.code,
+      state: custom.has(x.port) ? 'pinned' : (builtin.has(x.port) ? 'builtin' : 'new'),
+    })),
+  };
+}
+
+/* --------------------------------------------------- 自定义服务（写入配置） */
+
+const CUSTOM_ACCENTS = ['violet', 'cyan', 'green', 'pink', 'amber', 'blue'];
+
+/** 读磁盘上的原始配置（不做 ${ENV} 展开，写回时才不会把占位符换成真密码） */
+async function readRawConfig() {
+  try {
+    const raw = JSON.parse(await fsp.readFile(CONFIG_PATH, 'utf8'));
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveRawConfig(raw) {
+  await fsp.writeFile(CONFIG_PATH, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+}
+
+async function addCustomService(port, name) {
+  if (!validPort(port)) return { ok: false, error: 'port 不合法' };
+  if (builtinPortSet().has(port)) return { ok: false, error: `端口 ${port} 已经是面板里的服务` };
+  const raw = (await readRawConfig()) || {
+    site: cfg.site, bind: cfg.bind, port: cfg.port, services: [],
+  };
+  if (!Array.isArray(raw.services)) raw.services = [];
+  const id = `custom-${port}`;
+  const nm = String(name || '').trim().slice(0, 40) || `端口 ${port}`;
+  const exist = raw.services.find((s) => s && (s.custom === true) && Number(s.port) === port);
+  if (exist) {
+    exist.name = nm;
+  } else {
+    const used = new Set(raw.services.map((s) => String(s && s.id || '')));
+    let finalId = id;
+    let n = 2;
+    while (used.has(finalId)) finalId = `${id}-${n++}`;
+    raw.services.push({
+      id: finalId,
+      name: nm,
+      desc: `端口 ${port} · 扫描后手动加入`,
+      group: '自定义',
+      accent: CUSTOM_ACCENTS[port % CUSTOM_ACCENTS.length],
+      badge: String(port),
+      type: 'direct',
+      port,
+      custom: true,
+    });
+  }
+  await saveRawConfig(raw);
+  await reloadAfterWrite();
+  return { ok: true, ports: [...customPortSet()] };
+}
+
+async function removeCustomService(port) {
+  if (!validPort(port)) return { ok: false, error: 'port 不合法' };
+  const raw = await readRawConfig();
+  if (!raw || !Array.isArray(raw.services)) return { ok: false, error: '读不到 config.json' };
+  const before = raw.services.length;
+  raw.services = raw.services.filter((s) => !(s && s.custom === true && Number(s.port) === port));
+  if (raw.services.length === before) return { ok: false, error: `端口 ${port} 不在自定义列表里` };
+  await saveRawConfig(raw);
+  await reloadAfterWrite();
+  return { ok: true, ports: [...customPortSet()] };
+}
+
+async function reloadAfterWrite() {
+  await loadConfig();
+  cache.at = 0;
+}
+
 /* --------------------------------------------------------------- 地址解析 */
 
 function clientHost(req) {
@@ -408,6 +615,8 @@ async function buildServices(req) {
       accent: s.accent, badge: s.badge, icon: s.icon,
       url: resolveUrl(s, req),
       type: s.type,
+      port: s.port || 0,
+      custom: !!s.custom,
       alive: st.alive, code: st.code, ms: st.ms, err: st.err || '',
       secret: s.secret || '', secretLabel: s.secretLabel || '', autocopy: !!s.autocopy,
       openInNewTab: s.openInNewTab,
@@ -621,6 +830,31 @@ function checkAuth(req, res) {
 
 /* --------------------------------------------------------------- 主应用 */
 
+function readJsonBody(req, limit = 64 * 1024) {
+  return new Promise((resolve) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { req.destroy(); return resolve({}); }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      if (!chunks.length) return resolve({});
+      try {
+        const v = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        resolve(v && typeof v === 'object' ? v : {});
+      } catch { resolve({}); }
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
+function sendJson(res, code, obj) {
+  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+
 const app = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
@@ -653,6 +887,22 @@ const app = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ ok: true, tokens: lens }));
     }
 
+    if (p === '/api/scan') {
+      const r = await scanPorts();
+      return sendJson(res, 200, { ok: true, ports: r.ports, found: r.items.length, items: r.items });
+    }
+
+    if (p === '/api/services/add' || p === '/api/services/remove') {
+      const body = await readJsonBody(req);
+      const port = validPort(body.port);
+      if (!port) return sendJson(res, 400, { ok: false, error: 'port 不合法' });
+      const r = p === '/api/services/add'
+        ? await addCustomService(port, body.name)
+        : await removeCustomService(port);
+      log(`${p === '/api/services/add' ? '加入' : '移除'}自定义服务 ${port} -> ${r.ok ? 'ok' : r.error}`);
+      return sendJson(res, r.ok ? 200 : 400, r);
+    }
+
     if (p === '/api/config') {
       // 脱敏摘要：绝不返回 secret / password / token 内容
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
@@ -669,6 +919,7 @@ const app = http.createServer(async (req, res) => {
           target: s.type === 'proxy' ? `${s.upstream.host}:${s.upstream.port}` : `127.0.0.1:${s.port}`,
           proxyPort: s.proxyPort || null,
           hasSecret: !!s.secret,
+          custom: !!s.custom,
         })),
         warnings,
       }, null, 2));

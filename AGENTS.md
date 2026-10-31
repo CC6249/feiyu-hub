@@ -254,6 +254,27 @@ sudo systemctl restart feiyu-hub          # Linux / systemd
 > **字段写错不会让程序崩。** 非法项会被跳过并写进 `warnings`，用 `/api/config` 或 `verify.mjs` 都能看到。
 > 所以放心改，改坏了看警告。
 
+### 4.5 更省事的做法：先扫描，让用户挑
+
+用户说「我也不知道机器上有什么」时，别让他去 `netstat` 里翻。面板底部自带扫描：
+
+```bash
+curl -s http://127.0.0.1:18765/api/scan
+# {"ok":true,"ports":52,"found":6,"items":[{"port":8080,"title":"后台管理","code":200,"state":"new"}, ...]}
+
+# 用户点头要哪几个，再逐个写入（会改 config.json 并热加载，不用重启）
+curl -s -X POST http://127.0.0.1:18765/api/services/add \
+  -H 'Content-Type: application/json' -d '{"port":8080,"name":"后台管理"}'
+```
+
+要点：
+
+- `state` 三态：`new` 可以加，`builtin` 已经是配置里的服务，`pinned` 是之前加过的自定义项。
+- 加入的条目在 `config.json` 里带 `"custom": true`，界面上有「移除」，`/api/services/remove` 能删；
+  **手写条目没有这个标记，扫描/删除都碰不到**，不会误删用户手工配的东西。
+- 扫描只探本机 `127.0.0.1`，不扫局域网、不扫外网、不发包出去。
+- 状态码 ≥400 且拿不到 `<title>` 的端口会被丢掉（那种 404 空壳接口加进面板也没用）。
+
 ---
 
 ## 5. 验证（必须做，且把结论贴给用户）
@@ -324,5 +345,8 @@ sudo journalctl -u feiyu-hub -n 60 --no-pager -o cat     # Linux
 | `GET /api/config` | **脱敏**配置摘要（不含任何密码/token），含 `warnings` |
 | `GET /api/reload` | 热加载 `config.json` |
 | `GET /api/refresh` | 强制刷新所有 token |
+| `GET /api/scan` | 扫本机监听端口并探 HTTP 标题；每项带 `state`: `new` / `builtin` / `pinned` |
+| `POST /api/services/add` | 体 `{port,name}`。写进 `config.json` 的 `services`（`"custom": true`）并热加载 |
+| `POST /api/services/remove` | 体 `{port}`。只删 `custom: true` 的条目，手写配置不受影响 |
 | `GET /api/diag` | 进程、端口、每个 token 的长度与年龄 |
 | `GET /healthz` | 纯文本 `ok`，给容器/负载均衡探活用 |

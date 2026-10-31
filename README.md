@@ -20,7 +20,7 @@
 **Linux / NAS / 云服务器（fnOS、Debian、Ubuntu）**
 
 ```bash
-tar -xzf feiyu-hub-1.0.1.tar.gz && cd feiyu-hub-1.0.1
+tar -xzf feiyu-hub-1.0.2.tar.gz && cd feiyu-hub-1.0.2
 sudo bash scripts/install.sh
 ```
 
@@ -92,6 +92,18 @@ node server.mjs
 
 字段全集、token 两种来源、完整 JSON 模板都在 **[AGENTS.md 的「配置服务清单」](AGENTS.md#4-配置服务清单必须问用户)**。
 写错了不会崩——非法项会被跳过并记进 `warnings`，用 `verify.mjs` 或 `/api/config` 能看到。
+
+### 懒得写 JSON？扫一下，自己挑
+
+面板底部有「端口扫描」：点一下会把**本机正在监听的端口**挨个探一遍，能探出网页标题的就是 HTTP 后台。
+扫到的每一项右边都有按钮：
+
+- **加入面板** —— 立刻变成一张常驻卡片，同时写进 `config.json`（带 `"custom": true`），重启也还在。
+- **已在面板 / 已加入** —— 这个端口已经是一张卡片了，不重复添加。
+- 常驻卡片右下角有 **移除**，点掉会把那条从 `config.json` 里删干净。
+
+手写进 `config.json` 的卡片不会出现「移除」按钮，扫描也删不掉它们——只有自己加进去的才管得了自己。
+扫描是**同步 HTTP 探测**，不依赖外网，也不上传任何东西。
 
 ---
 
@@ -205,7 +217,7 @@ Hub 只负责「把服务摆到一个页面上」，**怎么把流量送到这�
 ## 目录结构
 
 ```
-feiyu-hub-1.0.1/
+feiyu-hub-1.0.2/
 ├── server.mjs              主程序（零依赖，约 500 行）
 ├── config.example.json     配置模板，复制成 config.json 用
 ├── public/                 前端（PWA：index.html / sw.js / 图标）
