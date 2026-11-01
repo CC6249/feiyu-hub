@@ -6,7 +6,8 @@
     "改完保存，访问 /api/reload 热加载（改 port / proxyPort / upstream 需要重启进程）。",
     "从哪儿访问先看两件事。① 装在哪：装在家里的内网机器，直连入口是局域网 IP；装在云服务器上就没有局域网这一说，入口是公网 IP 或域名，必须设密码、并在云厂商安全组放行端口。② 从哪些设备看：只电脑用可以 bind 127.0.0.1，手机也要看就必须 0.0.0.0（默认值），且宿主得是常开设备。③ 出门访问的组网、DDNS+端口映射、内网穿透、云机这几种通道可以同时开，不是四选一，共用同一个 bind 和 port，也不影响 services（卡片地址按访问时的 Host 动态生成）。鉴权无差别：设了密码内网访问同样要输。",
     "site.orientation 只影响手机「添加到主屏幕」后的屏幕方向：portrait 锁竖屏（默认），any 跟随手机自动旋转（平板横屏挂墙、想当仪表盘就用这个），landscape 锁横屏，也接受 auto 作为 any 的别名。桌面浏览器不受影响。",
-    "面板底部的「端口扫描」会列出本机所有 HTTP 后台，点「加入面板」就自动写进下面 services（带 custom: true），界面上可随时移除；手写条目没有这个标记，扫描和移除都碰不到它们。"
+    "面板底部的「端口扫描」会列出本机所有 HTTP 后台，点「加入面板」就自动写进下面 services（带 custom: true），界面上可随时移除；手写条目没有这个标记，扫描和移除都碰不到它们。",
+    "galaxy 是可选段落：填了就把长期记忆画成旋臂星系（页面 /memory-galaxy.html，带遗忘推演滑杆）。三个路径都指向 QQ 桥接的 state 目录；整段删掉也不影响面板其它功能，只是星图会是空的。"
   ],
   "site": {
     "name": "肥鱼控制中心",
@@ -32,11 +33,29 @@
     "dsh": {
       "type": "command",
       "cmd": "sudo",
-      "args": ["-n", "journalctl", "-u", "dsh", "--no-pager", "-o", "cat"],
+      "args": [
+        "-n",
+        "journalctl",
+        "-u",
+        "dsh",
+        "--no-pager",
+        "-o",
+        "cat"
+      ],
       "regex": "token=([A-Za-z0-9_-]{20,})",
       "pick": "last",
       "ttlSec": 300
     }
+  },
+  "galaxy": {
+    "_note": "mindGraph=主记忆库 JSON（memory.py 产出）；diaryDir=日记目录（按 *.md 切条）；activityLogs=聊天日志（当星尘，画消息点）。留空 = 该来源不参与。路径写绝对路径。",
+    "mindGraph": "/opt/qq-bridge/state/mind_graph.json",
+    "diaryDir": "/opt/qq-bridge/state/diary",
+    "activityLogs": [
+      "/opt/qq-bridge/state/qq-activity.log"
+    ],
+    "title": "记忆银河",
+    "cacheSeconds": 60
   },
   "services": [
     {
@@ -85,8 +104,15 @@
       "badge": "控制台",
       "type": "proxy",
       "proxyPort": 18766,
-      "upstream": { "host": "127.0.0.1", "port": 3100, "probePath": "/" },
-      "inject": { "kind": "query-token", "tokenId": "qqbridge" },
+      "upstream": {
+        "host": "127.0.0.1",
+        "port": 3100,
+        "probePath": "/"
+      },
+      "inject": {
+        "kind": "query-token",
+        "tokenId": "qqbridge"
+      },
       "probeWithToken": true
     },
     {
@@ -98,8 +124,15 @@
       "badge": "AI",
       "type": "proxy",
       "proxyPort": 18767,
-      "upstream": { "host": "127.0.0.1", "port": 3080, "probePath": "/" },
-      "inject": { "kind": "query-token", "tokenId": "dsh" },
+      "upstream": {
+        "host": "127.0.0.1",
+        "port": 3080,
+        "probePath": "/"
+      },
+      "inject": {
+        "kind": "query-token",
+        "tokenId": "dsh"
+      },
       "probeWithToken": true
     }
   ]

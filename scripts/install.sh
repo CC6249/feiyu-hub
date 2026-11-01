@@ -105,7 +105,7 @@ step "3/6 复制程序文件"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-for item in server.mjs public scripts config.example.json README.md AGENTS.md CLAUDE.md VERSION LICENSE skills; do
+for item in server.mjs galaxy-data.mjs public scripts config.example.json README.md AGENTS.md CLAUDE.md VERSION LICENSE skills; do
   if [ -e "$SRC_DIR/$item" ]; then cp -R "$SRC_DIR/$item" "$TMP/"; fi
 done
 

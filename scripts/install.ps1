@@ -78,7 +78,7 @@ New-Item -ItemType Directory -Path $Prefix -Force | Out-Null
 # ---------------------------------------------------------------- 3. copy
 Step "3/6 Copying files"
 
-$items = @('server.mjs', 'public', 'scripts', 'config.example.json', 'README.md', 'AGENTS.md', 'CLAUDE.md', 'VERSION', 'LICENSE', 'skills')
+$items = @('server.mjs', 'galaxy-data.mjs', 'public', 'scripts', 'config.example.json', 'README.md', 'AGENTS.md', 'CLAUDE.md', 'VERSION', 'LICENSE', 'skills')
 foreach ($i in $items) {
   $p = Join-Path $SrcDir $i
   if (Test-Path $p) {

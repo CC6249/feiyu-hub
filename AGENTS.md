@@ -349,4 +349,6 @@ sudo journalctl -u feiyu-hub -n 60 --no-pager -o cat     # Linux
 | `POST /api/services/add` | 体 `{port,name}`。写进 `config.json` 的 `services`（`"custom": true`）并热加载 |
 | `POST /api/services/remove` | 体 `{port}`。只删 `custom: true` 的条目，手写配置不受影响 |
 | `GET /api/diag` | 进程、端口、每个 token 的长度与年龄 |
+| `GET /api/galaxy` | 记忆银河数据（`{stars, messages, meta}`）。`?refresh=1` 跳过缓存 |
+| `GET /memory-galaxy.html` | 记忆银河页面（Canvas 2D 单文件，零依赖） |
 | `GET /healthz` | 纯文本 `ok`，给容器/负载均衡探活用 |

@@ -19,11 +19,12 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
+import { buildGalaxy } from './galaxy-data.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUB = path.join(ROOT, 'public');
 const CONFIG_PATH = path.resolve(process.env.FEIYU_CONFIG || path.join(ROOT, 'config.json'));
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 const LOCAL = '127.0.0.1';
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -44,6 +45,9 @@ const DEFAULT_CONFIG = {
   auth: null,
   tokens: {},
   services: [],
+  // 记忆银河：把长期记忆画成旋臂星系（页面 /memory-galaxy.html，Canvas 2D 零依赖）。
+  // 整段可以不配——不配时 /api/galaxy 返回空银河，页面照常打开。
+  galaxy: null,
 };
 
 /** 把字符串里的 ${ENV_NAME} 换成环境变量，方便用环境变量放密码而不落盘 */
@@ -228,6 +232,24 @@ function normalizeConfig(raw) {
     cfg.services.push(svc);
   }
 
+  // 记忆银河：可选段落。给了路径就画真实记忆，没给就返回空银河（页面照常打开，不报错）。
+  if (raw.galaxy && typeof raw.galaxy === 'object') {
+    const g = raw.galaxy;
+    const mindGraph = String(g.mindGraph || '').trim();
+    const diaryDir = String(g.diaryDir || '').trim();
+    const activityLogs = Array.isArray(g.activityLogs) ? g.activityLogs.map(String).filter(Boolean) : [];
+    if (!mindGraph && !diaryDir && !activityLogs.length) {
+      warnings.push('galaxy 段落里没有填任何数据路径，记忆银河会是空的');
+    }
+    cfg.galaxy = {
+      mindGraph,
+      diaryDir,
+      activityLogs,
+      title: String(g.title || '记忆银河'),
+      cacheSeconds: Number(g.cacheSeconds) > 0 ? Number(g.cacheSeconds) : 60,
+    };
+  }
+
   return { cfg, warnings };
 }
 
@@ -235,6 +257,8 @@ let cfg = DEFAULT_CONFIG;
 let warnings = [];
 let proxyServers = [];       // [{id, proxyPort, server}]
 let lastProxySignature = '';
+let galaxyCache = null;      // 记忆银河数据缓存
+let galaxyCacheAt = 0;
 
 function proxySignature(c) {
   return (c.services || [])
@@ -895,6 +919,28 @@ const app = http.createServer(async (req, res) => {
     if (p === '/api/ping') {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, version: VERSION, ts: Date.now() }));
+    }
+
+    // 记忆银河：给 memory-galaxy.html 提供星体数据（页面会依次试 api/galaxy、api/data）
+    if (p === '/api/galaxy' || p === '/api/galaxy/' || p === '/api/data') {
+      const g = cfg.galaxy || {};
+      const fresh = url.searchParams.get('refresh') === '1';
+      const ttl = (Number(g.cacheSeconds) > 0 ? Number(g.cacheSeconds) : 60) * 1000;
+      const t = Date.now();
+      if (!fresh && galaxyCache && t - galaxyCacheAt < ttl) {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        return res.end(JSON.stringify(galaxyCache));
+      }
+      const data = buildGalaxy({
+        mindGraph: g.mindGraph || '',
+        diaryDir: g.diaryDir || '',
+        activityLogs: g.activityLogs || [],
+      });
+      data.meta.title = g.title || '记忆银河';
+      galaxyCache = data;
+      galaxyCacheAt = t;
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify(data));
     }
 
     if (p === '/api/services') {

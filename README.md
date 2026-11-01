@@ -20,7 +20,7 @@
 **Linux / NAS / 云服务器（fnOS、Debian、Ubuntu）**
 
 ```bash
-tar -xzf feiyu-hub-1.0.3.tar.gz && cd feiyu-hub-1.0.3
+tar -xzf feiyu-hub-1.0.4.tar.gz && cd feiyu-hub-1.0.4
 sudo bash scripts/install.sh
 ```
 
@@ -114,6 +114,31 @@ node server.mjs
 
 手写进 `config.json` 的卡片不会出现「移除」按钮，扫描也删不掉它们——只有自己加进去的才管得了自己。
 扫描是**同步 HTTP 探测**，不依赖外网，也不上传任何东西。
+
+### 记忆银河（可选）：把长期记忆画成星系
+
+面板右上角有个星环图标，点开是 `/memory-galaxy.html`——把长期记忆画成一条**旋臂星系**：
+核心球是钉住的长期记忆，旋臂由内向外是越来越短期、越来越容易被忘掉的记忆。
+
+底部有根**遗忘推演滑杆**，往后拖 0~365 天就能看银河会怎么变稀（分「清晰 / 模糊 / 影子 / 沉底」四档）。
+还能拖动旋转、滚轮缩放（0.09×~32×）、单击看记忆详情、俯视看旋臂方向、按类型筛选。
+
+整段是 `config.json` 里的 `galaxy` 段落，**不配也不影响面板其它功能**（只是星图是空的）：
+
+```jsonc
+{
+  "galaxy": {
+    "mindGraph":   "/opt/qq-bridge/state/mind_graph.json",  // 主记忆库 JSON
+    "diaryDir":    "/opt/qq-bridge/state/diary",             // 日记目录（*.md）
+    "activityLogs": ["/opt/qq-bridge/state/qq-activity.log"],// 聊天日志（当星尘）
+    "title": "记忆银河",
+    "cacheSeconds": 60
+  }
+}
+```
+
+三个路径都指向你自己的记忆库，想画什么都行——只有填了的来源才会参与。
+数据是**只读**的：Hub 不会往你的记忆库里写任何东西。
 
 ---
 
@@ -227,10 +252,11 @@ Hub 只负责「把服务摆到一个页面上」，**怎么把流量送到这�
 ## 目录结构
 
 ```
-feiyu-hub-1.0.3/
+feiyu-hub-1.0.4/
 ├── server.mjs              主程序（零依赖，约 500 行）
+├── galaxy-data.mjs         记忆银河数据适配层（只读你的记忆库）
 ├── config.example.json     配置模板，复制成 config.json 用
-├── public/                 前端（PWA：index.html / sw.js / 图标）
+├── public/                 前端（PWA：index.html / sw.js / 图标 / memory-galaxy.html）
 ├── docs/screenshot.png     README 里的界面截图
 ├── scripts/
 │   ├── install.sh          Linux / NAS 一键安装（systemd）

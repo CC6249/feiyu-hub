@@ -1,4 +1,4 @@
-const CACHE = 'feiyu-hub-v3';
+const CACHE = 'feiyu-hub-v4';
 // manifest.json 由服务端按配置动态生成，不能进缓存，否则换品牌后不生效
 const ASSETS = ['/', '/icon-192.png', '/icon-180.png', '/icon-512.png'];
 
