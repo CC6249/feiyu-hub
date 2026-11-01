@@ -38,8 +38,13 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 
 **从源码 / git clone**
 
+仓库同时发布在 GitHub 与 Gitee，两边是相互独立、内容一致的仓库，任选其一即可：
+
 ```bash
+# GitHub
 git clone https://github.com/CC6249/feiyu-hub.git && cd feiyu-hub
+# 或 Gitee（国内更快）
+git clone https://gitee.com/BitstartCC/feiyu-hub.git && cd feiyu-hub
 cp config.example.json config.json
 node server.mjs
 # 浏览器打开 http://127.0.0.1:18765
